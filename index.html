@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control LEDs ESP32-C6 + Temperatura</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .temp-display {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 5px 15px rgba(245, 87, 108, 0.3);
+        }
+
+        .temp-label {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .temp-value {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .temp-unit {
+            font-size: 24px;
+            vertical-align: super;
+        }
+
+        .temp-time {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        
+        .led-control {
+            margin: 25px 0;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+        
+        .led-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .led-name {
+            display: flex;
+            align-items: center;
+        }
+        
+        .led-indicator {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background: #ccc;
+            transition: all 0.3s;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .led-indicator.active {
+            background: #2ecc71;
+            box-shadow: 0 0 20px #2ecc71, inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .led-status {
+            font-size: 14px;
+            color: #999;
+            font-weight: normal;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 18px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        button:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        
+        .btn-on {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .btn-on:hover:not(:disabled) {
+            background: #27ae60;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.4);
+        }
+        
+        .btn-off {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-off:hover:not(:disabled) {
+            background: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+        
+        .btn-both {
+            background: #3498db;
+            color: white;
+            margin-top: 20px;
+        }
+        
+        .btn-both:hover:not(:disabled) {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        
+        .status {
+            text-align: center;
+            margin-top: 30px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 10px;
+            color: #2e7d32;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .cooldown-warning {
+            text-align: center;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #856404;
+            display: none;
+        }
+        
+        .config {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 10px;
+            font-size: 12px;
+            color: #1565c0;
+        }
+        
+        .config-link {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎛️ Control de LEDs + Temperatura</h1>
+        <div class="subtitle">ESP32-C6 via ThingSpeak</div>
+        
+        <div class="temp-display">
+            <div class="temp-label">🌡️ Temperatura Actual</div>
+            <div class="temp-value" id="tempValue">
+                --.-<span class="temp-unit">°C</span>
+            </div>
+            <div class="temp-time" id="tempTime">Cargando...</div>
+        </div>
+
+        <div class="led-control">
+            <div class="led-title">
+                <div class="led-name">
+                    <div class="led-indicator" id="indicator1"></div>
+                    LED 1
+                </div>
+                <span class="led-status" id="status1">OFF</span>
+            </div>
+            <div class="button-group">
+                <button class="btn-on" onclick="controlLED(1, 1)">ON</button>
+                <button class="btn-off" onclick="controlLED(1, 0)">OFF</button>
+            </div>
+        </div>
+        
+        <div class="led-control">
+            <div class="led-title">
+                <div class="led-name">
+                    <div class="led-indicator" id="indicator2"></div>
+                    LED 2
+                </div>
+                <span class="led-status" id="status2">OFF</span>
+            </div>
+            <div class="button-group">
+                <button class="btn-on" onclick="controlLED(2, 1)">ON</button>
+                <button class="btn-off" onclick="controlLED(2, 0)">OFF</button>
+            </div>
+        </div>
+        
+        <button class="btn-both" onclick="controlAmbos(1)">⚡ ENCENDER AMBOS</button>
+        <button class="btn-both btn-off" onclick="controlAmbos(0)" style="margin-top: 10px;">🔌 APAGAR TODO</button>
+        
+        <div class="cooldown-warning" id="cooldownWarning">
+            ⏱️ Espera <span id="cooldownTimer">15</span>s antes del próximo comando
+        </div>
+
+        <div class="status" id="status">
+            ⚡ Listo para enviar comandos
+        </div>
+        
+        <div class="config">
+            ✅ Conectado al canal ThingSpeak #3172286<br>
+            🔄 Actualizando temperatura cada 10 segundos<br>
+            <a href="https://thingspeak.com/channels/3172286" class="config-link" target="_blank">Ver canal en ThingSpeak</a>
+        </div>
+    </div>
+
+    <script>
+        const WRITE_API_KEY = 'RXBY0OBMPB2VOOTN';
+        const READ_API_KEY = '7FC6OJ1SUO23RFD9';
+        const CHANNEL_ID = 3172286;
+        
+        let lastCommandTime = 0;
+        const COOLDOWN_MS = 15000;
+        let cooldownInterval = null;
+        
+        let led1State = 0;
+        let led2State = 0;
+        
+        function controlLED(led, estado) {
+            const now = Date.now();
+            const timeSinceLastCommand = now - lastCommandTime;
+            
+            if (timeSinceLastCommand < COOLDOWN_MS && lastCommandTime !== 0) {
+                const waitTime = Math.ceil((COOLDOWN_MS - timeSinceLastCommand) / 1000);
+                showStatus(`⏱️ Espera ${waitTime}s más (límite de ThingSpeak)`, 'warning');
+                return;
+            }
+            
+            if (led === 1) {
+                led1State = estado;
+            } else {
+                led2State = estado;
+            }
+            
+            const url = `https://api.thingspeak.com/update?api_key=${WRITE_API_KEY}&field${led}=${estado}`;
+            
+            updateUI(led, estado);
+            showStatus('📡 Enviando comando...', 'loading');
+            disableButtons(true);
+            
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    if (data !== '0') {
+                        showStatus(`✅ LED ${led} ${estado ? 'ENCENDIDO' : 'APAGADO'}`, 'success');
+                        lastCommandTime = Date.now();
+                        startCooldown();
+                    } else {
+                        throw new Error('API Key inválida');
+                    }
+                })
+                .catch(error => {
+                    showStatus('❌ Error: Verifica tu API Key', 'error');
+                    disableButtons(false);
+                });
+        }
+        
+        function controlAmbos(estado) {
+            const now = Date.now();
+            const timeSinceLastCommand = now - lastCommandTime;
+            
+            if (timeSinceLastCommand < COOLDOWN_MS && lastCommandTime !== 0) {
+                const waitTime = Math.ceil((COOLDOWN_MS - timeSinceLastCommand) / 1000);
+                showStatus(`⏱️ Espera ${waitTime}s más (límite de ThingSpeak)`, 'warning');
+                return;
+            }
+            
+            led1State = estado;
+            led2State = estado;
+            
+            const url = `https://api.thingspeak.com/update?api_key=${WRITE_API_KEY}&field1=${estado}&field2=${estado}`;
+            
+            updateUI(1, estado);
+            updateUI(2, estado);
+            
+            showStatus('📡 Enviando comando...', 'loading');
+            disableButtons(true);
+            
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    if (data !== '0') {
+                        showStatus(estado ? '✅ Ambos LEDs ENCENDIDOS' : '✅ Ambos LEDs APAGADOS', 'success');
+                        lastCommandTime = Date.now();
+                        startCooldown();
+                    } else {
+                        throw new Error('API Key inválida');
+                    }
+                })
+                .catch(error => {
+                    showStatus('❌ Error: Verifica tu API Key', 'error');
+                    disableButtons(false);
+                });
+        }
+        
+        function updateUI(led, estado) {
+            const indicator = document.getElementById(`indicator${led}`);
+            const statusText = document.getElementById(`status${led}`);
+            
+            if (estado === 1) {
+                indicator.classList.add('active');
+                statusText.textContent = 'ON';
+                statusText.style.color = '#2ecc71';
+            } else {
+                indicator.classList.remove('active');
+                statusText.textContent = 'OFF';
+                statusText.style.color = '#999';
+            }
+        }
+        
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.innerHTML = message;
+            
+            switch(type) {
+                case 'success':
+                    statusEl.style.background = '#e8f5e9';
+                    statusEl.style.color = '#2e7d32';
+                    break;
+                case 'error':
+                    statusEl.style.background = '#ffebee';
+                    statusEl.style.color = '#c62828';
+                    break;
+                case 'warning':
+                    statusEl.style.background = '#fff3cd';
+                    statusEl.style.color = '#856404';
+                    break;
+                case 'loading':
+                    statusEl.style.background = '#e3f2fd';
+                    statusEl.style.color = '#1565c0';
+                    break;
+            }
+        }
+        
+        function disableButtons(disabled) {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = disabled);
+        }
+        
+        function startCooldown() {
+            const cooldownEl = document.getElementById('cooldownWarning');
+            const timerEl = document.getElementById('cooldownTimer');
+            
+            cooldownEl.style.display = 'block';
+            
+            let remaining = 15;
+            timerEl.textContent = remaining;
+            
+            if (cooldownInterval) clearInterval(cooldownInterval);
+            
+            cooldownInterval = setInterval(() => {
+                remaining--;
+                timerEl.textContent = remaining;
+                
+                if (remaining <= 0) {
+                    clearInterval(cooldownInterval);
+                    cooldownEl.style.display = 'none';
+                    disableButtons(false);
+                }
+            }, 1000);
+        }
+        
+        // Solución CORS: Usar proxy público
+        async function leerTemperatura() {
+            try {
+                // Usar proxy CORS para evitar bloqueos del navegador
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const apiUrl = `https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/3/last.json`;
+                
+                const response = await fetch(proxyUrl + encodeURIComponent(apiUrl));
+                const data = await response.json();
+                
+                if (data && data.field3) {
+                    const temp = parseFloat(data.field3).toFixed(1);
+                    const tempEl = document.getElementById('tempValue');
+                    tempEl.innerHTML = `${temp}<span class="temp-unit">°C</span>`;
+                    
+                    const fecha = new Date(data.created_at);
+                    const timeStr = fecha.toLocaleTimeString('es-ES');
+                    document.getElementById('tempTime').textContent = `Última actualización: ${timeStr}`;
+                    
+                    console.log('✅ Temperatura leída correctamente:', temp + '°C');
+                } else {
+                    throw new Error('No hay datos en field3');
+                }
+            } catch (error) {
+                console.error('❌ Error leyendo temperatura:', error);
+                document.getElementById('tempTime').textContent = 'Error de conexión - Reintentando...';
+            }
+        }
+        
+        window.onload = function() {
+            showStatus('✅ Conectado a ThingSpeak - Listo', 'success');
+            
+            // Leer temperatura inmediatamente
+            leerTemperatura();
+            
+            // Actualizar temperatura cada 10 segundos
+            setInterval(leerTemperatura, 10000);
+        }
+    </script>
+</body>
+</html>
